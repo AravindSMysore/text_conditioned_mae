@@ -49,13 +49,14 @@ class CrossAttention(nn.Module):
         self.proj = nn.Linear(img_dim, img_dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, img_embeds, text_embeds):
+    def forward(self, img_embeds, text_embeds, text_attention_mask):
         """
         Forward pass for cross-attention.
         
         Args:
             img_embeds (torch.Tensor): Image embeddings of shape (B, N_img, img_dim).
             text_embeds (torch.Tensor): Text embeddings of shape (B, N_text, text_dim).
+            text_attention_mask (torch.Tensor): Attention mask for text embeddings of shape (B, N_text).
         
         Returns:
             torch.Tensor: Updated image embeddings after cross-attending to text embeddings.
@@ -73,6 +74,11 @@ class CrossAttention(nn.Module):
 
         # Compute scaled dot-product attention: Attention(QK^T) * V
         attn_scores = (q @ k.transpose(-2, -1)) * self.scale  # Shape: (B, num_heads, N_img, N_text)
+
+        # Apply the mask: set scores for padding tokens to a large negative value
+        mask_expanded = text_attention_mask.unsqueeze(1).unsqueeze(2)  # Shape: (B, 1, 1, N_text)
+        attn_scores = attn_scores.masked_fill(~mask_expanded.bool(), float('-inf'))
+
         attn_probs = attn_scores.softmax(dim=-1)              # Normalize across the last dimension (N_text)
         attn_probs = self.attn_drop(attn_probs)
 
@@ -113,12 +119,12 @@ class TextConditionedBlock(nn.Module):
         # Drop path
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x, text_embeddings, skip_cross_attn):
+    def forward(self, x, text_embeddings, text_attention_mask, skip_cross_attn):
         # Self attention
         x = x + self.drop_path(self.self_attn(self.norm1(x)))
         # Cross attention
         if not skip_cross_attn:
-            x = x + self.drop_path(self.cross_attn(self.norm_cross(x), text_embeddings))
+            x = x + self.drop_path(self.cross_attn(self.norm_cross(x), text_embeddings, text_attention_mask))
         # FFN
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
@@ -128,7 +134,7 @@ class TextConditionedMaskedAutoencoderViT(nn.Module):
                  embed_dim=1024, depth=24, num_heads=16,
                  decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
                  mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
-                 text_dim=768):  # Added text_dim parameter
+                 text_dim=1024):  # Added text_dim parameter
         super().__init__()
 
         # MAE encoder specifics
@@ -201,7 +207,7 @@ class TextConditionedMaskedAutoencoderViT(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward_encoder(self, x, text_embeddings, mask_ratio, skip_cross_attn):
+    def forward_encoder(self, x, text_embeddings, text_attention_mask, mask_ratio, skip_cross_attn):
         # embed patches
         x = self.patch_embed(x)
         x = x + self.pos_embed[:, 1:, :]
@@ -216,7 +222,7 @@ class TextConditionedMaskedAutoencoderViT(nn.Module):
         
         # apply Transformer blocks
         for blk in self.blocks:
-            x = blk(x, text_embeddings, skip_cross_attn)
+            x = blk(x, text_embeddings, text_attention_mask, skip_cross_attn)
         x = self.norm(x)
         
         return x, mask, ids_restore
@@ -249,8 +255,8 @@ class TextConditionedMaskedAutoencoderViT(nn.Module):
         
         return x
 
-    def forward(self, imgs, text_embeddings, mask_ratio=0.75, skip_cross_attn=False):
-        latent, mask, ids_restore = self.forward_encoder(imgs, text_embeddings, mask_ratio, skip_cross_attn)
+    def forward(self, imgs, text_embeddings, text_attention_mask, mask_ratio=0.75, skip_cross_attn=False):
+        latent, mask, ids_restore = self.forward_encoder(imgs, text_embeddings, text_attention_mask, mask_ratio, skip_cross_attn)
         cls_tokens = latent[:, :1, :]
         itm_probs = self.itm_head(cls_tokens)
         pred = self.forward_decoder(latent, ids_restore)
@@ -342,5 +348,5 @@ def get_mae_vit_large_patch16_text_conditioned(**kwargs):
     model = TextConditionedMaskedAutoencoderViT(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16,
         decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
-        mlp_ratio=4, text_dim=768, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+        mlp_ratio=4, text_dim=1024, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
