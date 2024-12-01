@@ -257,8 +257,8 @@ class TextConditionedMaskedAutoencoderViT(nn.Module):
 
     def forward(self, imgs, text_embeddings, text_attention_mask, mask_ratio=0.75, skip_cross_attn=False):
         latent, mask, ids_restore = self.forward_encoder(imgs, text_embeddings, text_attention_mask, mask_ratio, skip_cross_attn)
-        cls_tokens = latent[:, :1, :]
-        itm_probs = self.itm_head(cls_tokens)
+        cls_tokens = latent[:, 0, :]
+        itm_probs = self.itm_head(cls_tokens)[:, 0]
         pred = self.forward_decoder(latent, ids_restore)
         reconstruction_loss = self.forward_loss(imgs, pred, mask)
         return reconstruction_loss, pred, mask, itm_probs

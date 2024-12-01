@@ -33,7 +33,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import text_conditioned_mae
 import models_mae
 
-from engine_pretrain import train_one_epoch
+from text_conditioned_engine_pretrain import train_one_epoch
 from text_conditioned_dataloader import get_dataloaders
 
 
@@ -131,13 +131,13 @@ def main(args):
     cudnn.benchmark = True
 
     # simple augmentation
-    transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    print(dataset_train)
+    # transform_train = transforms.Compose([
+    #         transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+    #         transforms.RandomHorizontalFlip(),
+    #         transforms.ToTensor(),
+    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    # dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+    # print(dataset_train)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
@@ -162,7 +162,7 @@ def main(args):
     #     pin_memory=args.pin_mem,
     #     drop_last=True,
     # )
-    chkpt_dir = 'data/mae_visualize_vit_large.pth'
+    chkpt_dir = 'demo/mae_visualize_vit_large.pth'
     model_mae = prepare_model(chkpt_dir, 'mae_vit_large_patch16')
     # define the model
     model = text_conditioned_mae.get_mae_vit_large_patch16_text_conditioned()
@@ -198,8 +198,8 @@ def main(args):
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            data_loader_train.sampler.set_epoch(epoch)
+        # if args.distributed:
+        #     data_loader_train.sampler.set_epoch(epoch)
         train_stats = train_one_epoch(
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler,

@@ -48,7 +48,8 @@ def train_one_epoch(model: torch.nn.Module,
 
         with torch.cuda.amp.autocast():
             reconstruction_loss, pred, mask, itm_probs = model(image_embeddings, text_embeddings, text_attention_mask)
-        cross_entropy_loss = torch.nn.functional.cross_entropy(itm_probs, itm_label)
+            # print("itm_probs, itm_label.float()", itm_probs.shape, itm_label.float().shape)
+        cross_entropy_loss = torch.nn.functional.binary_cross_entropy(itm_probs, itm_label.to(itm_probs.dtype))
         total_loss = reconstruction_loss + cross_entropy_loss
         total_loss_value = total_loss.item()
 
