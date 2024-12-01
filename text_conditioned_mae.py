@@ -177,6 +177,9 @@ class TextConditionedMaskedAutoencoderViT(nn.Module):
         self.norm_pix_loss = norm_pix_loss
         self.initialize_weights()
 
+        # New for UMAE
+        self.fc_norm = norm_layer(embed_dim)
+
     def initialize_weights(self):
         # initialization
         # initialize (and freeze) pos_embed by sin-cos embedding
@@ -261,7 +264,14 @@ class TextConditionedMaskedAutoencoderViT(nn.Module):
         itm_probs = self.itm_head(cls_tokens)[:, 0]
         pred = self.forward_decoder(latent, ids_restore)
         reconstruction_loss = self.forward_loss(imgs, pred, mask)
-        return reconstruction_loss, pred, mask, itm_probs
+        # get cls feature
+        if True:
+            cls_feats = latent[:, 1:, :].mean(dim=1)  # global pool without cls token
+            cls_feats = self.fc_norm(cls_feats)
+        else:
+            cls_feats = self.norm(latent)
+            cls_feats = cls_feats[:, 0]
+        return reconstruction_loss, pred, mask, cls_feats, itm_probs
 
     # Keep all other methods from original MAE unchanged
     def patchify(self, imgs):

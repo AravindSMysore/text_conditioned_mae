@@ -103,6 +103,10 @@ def get_args_parser():
     parser.add_argument('--dist_on_itp', action='store_true')
     parser.add_argument('--dist_url', default='env://',
                         help='url used to set up distributed training')
+    
+    # New for UMAE
+    parser.add_argument('--lamb', type=float, default=1e-2)
+    parser.add_argument('--reg', type=str, default='spectral', choices=['none', 'entropy', 'spectral'])
 
     return parser
 

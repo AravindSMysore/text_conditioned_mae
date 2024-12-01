@@ -16,6 +16,7 @@ import torch
 
 import util.misc as misc
 import util.lr_sched as lr_sched
+from loss_func import uniformity_loss
 
 
 def train_one_epoch(model: torch.nn.Module,
@@ -47,10 +48,16 @@ def train_one_epoch(model: torch.nn.Module,
         itm_label = itm_label.to(device, non_blocking=True)
 
         with torch.cuda.amp.autocast():
-            reconstruction_loss, pred, mask, itm_probs = model(image_embeddings, text_embeddings, text_attention_mask)
+            reconstruction_loss, pred, mask, embedding_feats, itm_probs = model(image_embeddings, text_embeddings, text_attention_mask)
+            
+            if args.reg == 'none':
+                loss_reg = torch.tensor(0.0).to(embedding_feats.device)
+            else:
+                loss_reg = uniformity_loss(embedding_feats)
+            
             # print("itm_probs, itm_label.float()", itm_probs.shape, itm_label.float().shape)
         cross_entropy_loss = torch.nn.functional.binary_cross_entropy(itm_probs, itm_label.to(itm_probs.dtype))
-        total_loss = reconstruction_loss + cross_entropy_loss
+        total_loss = reconstruction_loss + cross_entropy_loss + args.lamb * loss_reg
         total_loss_value = total_loss.item()
 
         if not math.isfinite(total_loss_value):
